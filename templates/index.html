@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech to Text</title>
+<style>
+  :root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --danger: #ef4444;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 4px 24px rgba(99,102,241,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 60px; display: flex; align-items: center;
+    justify-content: space-between; box-shadow: 0 1px 8px rgba(0,0,0,.06);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .logo svg { color: var(--primary); }
+  .btn-icon {
+    width: 40px; height: 40px; border-radius: 10px; border: none;
+    background: var(--bg); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: background .2s; color: var(--text-muted);
+  }
+  .btn-icon:hover { background: #e2e8f0; color: var(--primary); }
+
+  main { max-width: 760px; margin: 0 auto; padding: 28px 16px; display: flex; flex-direction: column; gap: 20px; }
+
+  .card { background: var(--card); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); }
+  .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 14px; }
+
+  /* Engine selector */
+  .engine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .engine-btn { border: 2px solid var(--border); border-radius: 12px; padding: 14px 16px; cursor: pointer; background: var(--card); text-align: left; transition: all .2s; }
+  .engine-btn:hover { border-color: var(--primary); background: #f5f3ff; }
+  .engine-btn.active { border-color: var(--primary); background: #ede9fe; }
+  .engine-btn .label { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .engine-btn .desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .badge { font-size: 10px; padding: 2px 7px; border-radius: 99px; font-weight: 600; text-transform: uppercase; }
+  .badge-free { background: #d1fae5; color: #065f46; }
+  .badge-cloud { background: #dbeafe; color: #1e40af; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+  .tab-btn {
+    flex: 1; padding: 9px; border-radius: 9px; border: none; cursor: pointer;
+    background: transparent; font-size: 14px; font-weight: 500; color: var(--text-muted);
+    transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .tab-btn.active { background: var(--card); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Language */
+  .lang-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .lang-row label { font-size: 14px; font-weight: 500; white-space: nowrap; }
+  select { flex: 1; padding: 9px 14px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--card); font-size: 14px; color: var(--text); cursor: pointer; outline: none; transition: border-color .2s; }
+  select:focus { border-color: var(--primary); }
+
+  /* Record area */
+  .record-area { text-align: center; padding: 8px 0; }
+  .waveform-wrap { height: 80px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; }
+  canvas#waveform { width: 100%; height: 80px; border-radius: 10px; }
+  .idle-wave { width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); }
+
+  .record-btn {
+    width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;
+    box-shadow: 0 8px 24px rgba(99,102,241,.4); transition: all .2s;
+    display: inline-flex; align-items: center; justify-content: center; position: relative;
+  }
+  .record-btn:hover { transform: scale(1.06); box-shadow: 0 12px 32px rgba(99,102,241,.5); }
+  .record-btn.recording { background: linear-gradient(135deg, #f87171, var(--danger)); box-shadow: 0 8px 24px rgba(239,68,68,.4); animation: pulse 1.5s ease-in-out infinite; }
+  .record-btn.processing { background: linear-gradient(135deg, #fbbf24, var(--warning)); box-shadow: 0 8px 24px rgba(245,158,11,.4); cursor: not-allowed; animation: pulse-warn 1s linear infinite; }
+  @keyframes pulse { 0%,100% { box-shadow:0 8px 24px rgba(239,68,68,.4); } 50% { box-shadow:0 8px 40px rgba(239,68,68,.7); } }
+  @keyframes pulse-warn { 0%,100% { box-shadow:0 8px 24px rgba(245,158,11,.4); } 50% { box-shadow:0 8px 40px rgba(245,158,11,.7); } }
+  @keyframes rotate { to { transform: rotate(360deg); } }
+
+  .status-text { margin-top: 12px; font-size: 14px; color: var(--text-muted); height: 20px; transition: color .2s; }
+  .status-text.recording { color: var(--danger); font-weight: 600; }
+  .status-text.processing { color: var(--warning); font-weight: 600; }
+  .timer { font-size: 13px; color: var(--danger); font-variant-numeric: tabular-nums; margin-top: 2px; min-height: 18px; }
+
+  /* Upload area */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 36px 24px;
+    text-align: center; cursor: pointer; transition: all .2s;
+    background: #fafafa;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--primary); background: #f5f3ff; }
+  .drop-zone.drag-over { transform: scale(1.01); }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .drop-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+  .drop-formats { margin-top: 14px; font-size: 12px; color: var(--text-muted); }
+  .fmt-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
+  .fmt-chip { padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+  .fmt-chip.native { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+
+  /* File info card */
+  .file-card {
+    display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+    background: var(--bg); border-radius: 12px; border: 1.5px solid var(--border);
+    margin-top: 14px;
+  }
+  .file-icon-wrap { width: 44px; height: 44px; border-radius: 10px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .file-details { flex: 1; min-width: 0; }
+  .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; display: flex; align-items: center; gap: 8px; }
+  .fmt-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+
+  .upload-btn-row { text-align: center; margin-top: 18px; }
+  .process-btn {
+    padding: 12px 32px; border-radius: 12px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;
+    font-size: 15px; font-weight: 600; box-shadow: 0 6px 20px rgba(99,102,241,.4);
+    display: inline-flex; align-items: center; gap: 8px; transition: all .2s;
+  }
+  .process-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(99,102,241,.5); }
+  .process-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+  .upload-hint { font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: center; }
+  .upload-hint.warn { color: #d97706; }
+
+  /* Transcript */
+  .transcript-area {
+    min-height: 120px; border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; font-size: 15px; line-height: 1.7;
+    background: #fafafa; resize: vertical; transition: border-color .2s;
+    outline: none; font-family: inherit; color: var(--text); width: 100%;
+  }
+  .transcript-area:focus { border-color: var(--primary); }
+
+  .meta-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+  .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 6px; transition: all .2s; }
+  .btn-ghost { background: var(--bg); color: var(--text-muted); }
+  .btn-ghost:hover { background: #e2e8f0; color: var(--text); }
+  .btn-danger { background: #fee2e2; color: var(--danger); }
+  .btn-danger:hover { background: #fecaca; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,.15); transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 100; max-width: 360px; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .toast.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .toast.info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.4); backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center; padding: 16px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 20px; padding: 28px; width: 100%; max-width: 480px; box-shadow: 0 24px 64px rgba(0,0,0,.2); animation: slide-up .25s ease-out; }
+  @keyframes slide-up { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .modal-title { font-size: 18px; font-weight: 700; }
+  .modal-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--bg); cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background .2s; }
+  .modal-close:hover { background: #e2e8f0; }
+  .form-group { margin-bottom: 20px; }
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block; }
+  .form-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--border); font-size: 14px; outline: none; transition: border-color .2s; font-family: monospace; }
+  .form-input:focus { border-color: var(--primary); }
+  .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+  .form-hint a { color: var(--primary); text-decoration: none; }
+  .form-hint a:hover { text-decoration: underline; }
+  .api-status { padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-top: 10px; display: none; align-items: center; gap: 8px; }
+  .api-status.show { display: flex; }
+  .api-status.ok   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .api-status.fail { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .key-indicator { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 99px; font-weight: 500; }
+  .key-indicator.set   { background: #d1fae5; color: #065f46; }
+  .key-indicator.unset { background: #fee2e2; color: #b91c1c; }
+
+  .modal { max-height: calc(100vh - 32px); overflow-y: auto; }
+  .inline-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .section-divider {
+    font-size: 13px; font-weight: 700; color: var(--text); margin: 8px 0 16px;
+    padding-top: 18px; border-top: 1px solid var(--border);
+  }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { margin-bottom: 16px; }
+  .seg { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 10px; }
+  .seg label {
+    flex: 1; text-align: center; padding: 8px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--text-muted);
+  }
+  .seg input { display: none; }
+  .seg label:has(input:checked) { background: var(--card); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .form-input:disabled { background: var(--bg); color: var(--text-muted); }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  .form-hint code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+  .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+  .history-item {
+    border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px;
+    cursor: pointer; transition: border-color .2s; background: var(--card); text-align: left;
+    font: inherit; color: inherit; width: 100%;
+  }
+  .history-item:hover { border-color: var(--primary); }
+  .history-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .history-text { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 12px; }
+
+  @media (max-width: 480px) {
+    .engine-grid { grid-template-columns: 1fr; }
+    .meta-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 3a4 4 0 014 4v4a4 4 0 01-8 0V7a4 4 0 014-4z"/>
+    </svg>
+    Speech to Text
+  </div>
+  <button class="btn-icon" id="btnSettings" title="Cài đặt">
+    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <!-- Engine selector -->
+  <div class="card">
+    <div class="card-title">Công cụ nhận diện</div>
+    <div class="engine-grid">
+      <button class="engine-btn active" data-engine="speechrecognition">
+        <div class="label">SpeechRecognition <span class="badge badge-free">Miễn phí</span></div>
+        <div class="desc">Google Web Speech API, không cần API Key</div>
+      </button>
+      <button class="engine-btn" data-engine="google_cloud">
+        <div class="label">Google Cloud STT <span class="badge badge-cloud">Cloud</span></div>
+        <div class="desc">Chính thức, độ chính xác cao, cần API Key</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Record / Upload tabs -->
+  <div class="card">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="record">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 3a4 4 0 014 4v4a4 4 0 01-8 0V7a4 4 0 014-4z"/>
+        </svg>
+        Ghi âm
+      </button>
+      <button class="tab-btn" data-tab="upload">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        Upload file
+      </button>
+    </div>
+
+    <!-- Shared: language -->
+    <div class="lang-row">
+      <label for="langSelect">Ngôn ngữ:</label>
+      <select id="langSelect">
+        <option value="vi-VN">🇻🇳 Tiếng Việt</option>
+        <option value="en-US">🇺🇸 English (US)</option>
+        <option value="en-GB">🇬🇧 English (UK)</option>
+        <option value="ja-JP">🇯🇵 日本語</option>
+        <option value="ko-KR">🇰🇷 한국어</option>
+        <option value="zh-CN">🇨🇳 中文 (简体)</option>
+        <option value="zh-TW">🇹🇼 中文 (繁體)</option>
+        <option value="fr-FR">🇫🇷 Français</option>
+        <option value="de-DE">🇩🇪 Deutsch</option>
+        <option value="es-ES">🇪🇸 Español</option>
+        <option value="th-TH">🇹🇭 ภาษาไทย</option>
+        <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
+      </select>
+    </div>
+
+    <!-- Tab: Record -->
+    <div class="tab-pane active" id="paneRecord">
+      <div class="record-area">
+        <div class="waveform-wrap">
+          <canvas id="waveform"></canvas>
+          <div class="idle-wave" id="idleWave"></div>
+        </div>
+        <button class="record-btn" id="recordBtn" title="Nhấn để ghi âm">
+          <svg id="iconMic" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 3a4 4 0 014 4v4a4 4 0 01-8 0V7a4 4 0 014-4z"/>
+          </svg>
+          <svg id="iconStop" width="28" height="28" fill="currentColor" viewBox="0 0 24 24" style="display:none">
+            <rect x="6" y="6" width="12" height="12" rx="2"/>
+          </svg>
+          <svg id="iconSpinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;animation:rotate 1s linear infinite;">
+            <path stroke-linecap="round" d="M12 2a10 10 0 0 1 0 20" opacity=".3"/>
+            <path stroke-linecap="round" d="M12 2a10 10 0 0 1 10 10"/>
+          </svg>
+        </button>
+        <div class="status-text" id="statusText">Nhấn để bắt đầu ghi âm</div>
+        <div class="timer" id="timer"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Upload -->
+    <div class="tab-pane" id="paneUpload">
+      <!-- Drop zone -->
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.opus,.webm,.m4a,.aac,.amr" hidden>
+        <div class="drop-icon">🎵</div>
+        <div class="drop-title">Kéo thả file âm thanh vào đây</div>
+        <div class="drop-sub">hoặc</div>
+        <button type="button" class="btn btn-ghost" id="btnPickFile">Chọn file từ máy</button>
+        <div class="drop-formats">Định dạng hỗ trợ:</div>
+        <div class="fmt-chips">
+          <span class="fmt-chip native">WAV</span>
+          <span class="fmt-chip native">MP3</span>
+          <span class="fmt-chip native">FLAC</span>
+          <span class="fmt-chip native">OGG</span>
+          <span class="fmt-chip">M4A*</span>
+          <span class="fmt-chip">WEBM</span>
+          <span class="fmt-chip">AMR</span>
+        </div>
+        <div id="ffmpegNote" style="font-size:11px;color:var(--text-muted);margin-top:8px">* M4A/AAC cần pydub + ffmpeg</div>
+      </div>
+
+      <!-- File info (shown after selection) -->
+      <div id="fileInfo" style="display:none">
+        <div class="file-card">
+          <div class="file-icon-wrap" id="fileIconWrap">🎵</div>
+          <div class="file-details">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-meta">
+              <span id="fileSize"></span>
+              <span id="fileFmt" class="fmt-badge"></span>
+            </div>
+          </div>
+          <button class="btn-icon" id="btnRemoveFile" title="Xóa file" style="flex-shrink:0">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="upload-btn-row">
+          <button class="process-btn" id="btnProcess">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            <span id="processLabel">Nhận diện giọng nói</span>
+          </button>
+          <div class="upload-hint" id="uploadHint"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transcript output -->
+  <div class="card">
+    <div class="card-title">Kết quả</div>
+    <textarea class="transcript-area" id="transcriptArea"
+              placeholder="Kết quả nhận diện giọng nói sẽ hiển thị ở đây..."
+              readonly></textarea>
+    <div class="meta-row">
+      <span id="metaInfo"></span>
+      <div class="action-row">
+        <button class="btn btn-ghost" id="btnCopy">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          Sao chép
+        </button>
+        <button class="btn btn-ghost" id="btnDownload">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3h18v-3"/>
+          </svg>
+          Tải .txt
+        </button>
+        <button class="btn btn-ghost" id="btnSaveDb" title="Lưu vào PostgreSQL">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <ellipse cx="12" cy="5" rx="8" ry="3"/>
+            <path stroke-linecap="round" d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/>
+          </svg>
+          <span id="saveDbLabel">Lưu DB</span>
+        </button>
+        <button class="btn btn-danger" id="btnClear">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          Xóa
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History from PostgreSQL -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="history-header">
+      <div class="card-title" style="margin:0">Lịch sử (PostgreSQL)</div>
+      <button class="btn btn-ghost" id="btnReloadHistory">Tải lại</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </div>
+</main>
+
+<!-- Settings modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚙️ Cài đặt</div>
+      <button class="modal-close" id="btnCloseModal">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Google Cloud Speech-to-Text API Key</label>
+      <input type="password" class="form-input" id="apiKeyInput" placeholder="AIza..." autocomplete="off" spellcheck="false">
+      <div class="api-status" id="apiStatus"></div>
+      <p class="form-hint">
+        Cần để dùng engine <strong>Google Cloud STT</strong>.<br>
+        Lấy API Key tại
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
+        → Bật <em>Cloud Speech-to-Text API</em>.
+      </p>
+    </div>
+    <div class="form-group inline-actions" id="apiKeyStatusRow" style="display:none">
+      <div id="apiKeyIndicator" class="key-indicator unset"></div>
+      <button class="btn btn-ghost" id="btnTestKey">Kiểm tra API Key</button>
+    </div>
+
+    <div class="section-divider">PostgreSQL</div>
+
+    <div class="form-group">
+      <label class="form-label">Server</label>
+      <div class="seg">
+        <label><input type="radio" name="dbMode" value="localhost" checked> Localhost</label>
+        <label><input type="radio" name="dbMode" value="remote"> Server khác (IP)</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:3">
+        <label class="form-label" for="dbHost">Host / IP</label>
+        <input class="form-input" id="dbHost" placeholder="192.168.1.10" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="dbPort">Port</label>
+        <input class="form-input" id="dbPort" type="number" min="1" max="65535" value="5432">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="dbName">Database</label>
+        <input class="form-input" id="dbName" value="postgres" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label" for="dbUser">User</label>
+        <input class="form-input" id="dbUser" value="postgres" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="dbPassword">Mật khẩu</label>
+      <input class="form-input" id="dbPassword" type="password" autocomplete="new-password" placeholder="Nhập mật khẩu PostgreSQL">
+      <p class="form-hint" id="dbPasswordHint"></p>
+    </div>
+    <div class="form-group">
+      <label class="check-row"><input type="checkbox" id="dbAutoSave"> Tự động lưu mỗi kết quả nhận diện vào DB</label>
+      <div class="api-status" id="dbStatus"></div>
+      <p class="form-hint">Kết quả được lưu vào bảng <code>transcripts</code> (tự tạo nếu chưa có).</p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnTestDb">Kiểm tra kết nối DB</button>
+      <button class="btn btn-primary" id="btnSaveSettings">Lưu cài đặt</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────
+let engine   = 'speechrecognition';
+let language = 'vi-VN';
+let uploadedFile = null;
+let ffmpegAvailable = false;
+let dbConfigured = false;
+let hasSavedApiKey = false;
+let lastResult = null;
+
+// Recording state
+let isRecording  = false;
+let isProcessing = false;
+let audioCtx = null, mediaStream = null, processor = null, analyserNode = null;
+let pcmChunks = [], sampleRate = 16000;
+let timerInterval = null, timerSeconds = 0, animationId = null;
+
+// ── DOM ────────────────────────────────────
+const recordBtn    = document.getElementById('recordBtn');
+const iconMic      = document.getElementById('iconMic');
+const iconStop     = document.getElementById('iconStop');
+const iconSpinner  = document.getElementById('iconSpinner');
+const statusText   = document.getElementById('statusText');
+const timerEl      = document.getElementById('timer');
+const canvas       = document.getElementById('waveform');
+const idleWave     = document.getElementById('idleWave');
+const canvasCtx    = canvas.getContext('2d');
+const transcriptEl = document.getElementById('transcriptArea');
+const metaInfo     = document.getElementById('metaInfo');
+const toast        = document.getElementById('toast');
+const overlay      = document.getElementById('overlay');
+const apiKeyInput  = document.getElementById('apiKeyInput');
+const apiStatus    = document.getElementById('apiStatus');
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const fileInfo     = document.getElementById('fileInfo');
+const btnProcess   = document.getElementById('btnProcess');
+
+// ── Init ───────────────────────────────────
+async function init() {
+  const res = await fetch('/api/settings').then(r => r.json());
+  engine   = res.engine   || 'speechrecognition';
+  ffmpegAvailable = !!res.ffmpeg_available;
+  document.getElementById('ffmpegNote').style.display = ffmpegAvailable ? 'none' : '';
+  language = res.language || 'vi-VN';
+
+  document.querySelectorAll('.engine-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.engine === engine);
+  });
+  document.getElementById('langSelect').value = language;
+
+  const ind = document.getElementById('apiKeyIndicator');
+  document.getElementById('apiKeyStatusRow').style.display = 'flex';
+  hasSavedApiKey = !!res.has_api_key;
+  if (res.has_api_key) {
+    ind.textContent = '✓ API Key đã cấu hình';
+    ind.className = 'key-indicator set';
+  } else {
+    ind.textContent = '✗ Chưa có API Key';
+    ind.className = 'key-indicator unset';
+  }
+  updateUploadHint();
+
+  fillDbForm(res.db);
+  dbConfigured = !!res.db.configured;
+  document.getElementById('historyCard').style.display = dbConfigured ? '' : 'none';
+  loadHistory();
+}
+init();
+
+// ── Engine / Language ──────────────────────
+document.querySelectorAll('.engine-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    engine = btn.dataset.engine;
+    updateUploadHint();
+  });
+});
+document.getElementById('langSelect').addEventListener('change', e => { language = e.target.value; });
+
+// ── Tabs ───────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('pane' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
+  });
+});
+
+// ── Upload: Drop zone ──────────────────────
+const FORMAT_META = {
+  wav:  { icon: '🎙️', color: '#d1fae5', text: '#065f46', label: 'WAV' },
+  mp3:  { icon: '🎵', color: '#dbeafe', text: '#1e40af', label: 'MP3' },
+  flac: { icon: '🔊', color: '#ede9fe', text: '#5b21b6', label: 'FLAC' },
+  ogg:  { icon: '🎶', color: '#fef3c7', text: '#92400e', label: 'OGG' },
+  opus: { icon: '🎶', color: '#fef3c7', text: '#92400e', label: 'OPUS' },
+  webm: { icon: '📹', color: '#f3f4f6', text: '#374151', label: 'WEBM' },
+  m4a:  { icon: '🎵', color: '#fee2e2', text: '#b91c1c', label: 'M4A' },
+  aac:  { icon: '🎵', color: '#fee2e2', text: '#b91c1c', label: 'AAC' },
+  amr:  { icon: '📞', color: '#f3f4f6', text: '#374151', label: 'AMR' },
+};
+
+const ACCEPTED_EXTS = new Set(['.wav','.mp3','.flac','.ogg','.opus','.webm','.m4a','.aac','.amr']);
+
+dropZone.addEventListener('click', e => {
+  if (!e.target.closest('#btnPickFile') && e.target !== dropZone && !dropZone.contains(e.target)) return;
+  fileInput.click();
+});
+document.getElementById('btnPickFile').addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setUploadFile(fileInput.files[0]); });
+
+dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setUploadFile(file);
+});
+
+document.getElementById('btnRemoveFile').addEventListener('click', clearUploadFile);
+
+function setUploadFile(file) {
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!ACCEPTED_EXTS.has(ext)) {
+    showToast(`Định dạng "${ext}" không hỗ trợ`, 'error');
+    return;
+  }
+  uploadedFile = file;
+  const extKey = ext.slice(1);
+  const meta = FORMAT_META[extKey] || { icon: '🎵', color: '#f3f4f6', text: '#374151', label: extKey.toUpperCase() };
+
+  document.getElementById('fileIconWrap').textContent = meta.icon;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatBytes(file.size);
+  const fmtBadge = document.getElementById('fileFmt');
+  fmtBadge.textContent = meta.label;
+  fmtBadge.style.cssText = `background:${meta.color};color:${meta.text};`;
+
+  dropZone.style.display = 'none';
+  fileInfo.style.display = 'block';
+  updateUploadHint();
+}
+
+function clearUploadFile() {
+  uploadedFile = null;
+  fileInput.value = '';
+  dropZone.style.display = '';
+  fileInfo.style.display = 'none';
+}
+
+function updateUploadHint() {
+  const hint = document.getElementById('uploadHint');
+  if (!uploadedFile || ffmpegAvailable) { hint.textContent = ''; return; }
+  const ext = '.' + uploadedFile.name.split('.').pop().toLowerCase();
+  if (engine === 'speechrecognition' && ext !== '.wav') {
+    hint.className = 'upload-hint warn';
+    hint.textContent = '⚠️ SpeechRecognition cần ffmpeg/pydub cho định dạng này. Hoặc chọn Google Cloud STT.';
+  } else if (['.m4a','.aac'].includes(ext)) {
+    hint.className = 'upload-hint warn';
+    hint.textContent = '⚠️ M4A/AAC cần pydub + ffmpeg để chuyển đổi.';
+  } else {
+    hint.className = 'upload-hint';
+    hint.textContent = '';
+  }
+}
+
+function formatBytes(b) {
+  if (b < 1024)     return b + ' B';
+  if (b < 1048576)  return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+// ── Upload: Process ────────────────────────
+btnProcess.addEventListener('click', async () => {
+  if (!uploadedFile || isProcessing) return;
+
+  // The user may remove the file while the request is in flight
+  const fileName = uploadedFile.name;
+  const fd = new FormData();
+  fd.append('audio', uploadedFile, fileName);
+  fd.append('engine', engine);
+  fd.append('language', language);
+  fd.append('source', 'upload');
+
+  setUploadProcessing(true);
+  try {
+    const res  = await fetch('/api/transcribe', { method: 'POST', body: fd });
+    const data = await parseResponse(res);
+    if (data.error) showToast(data.error, 'error');
+    else applyTranscriptResult(data, 'upload', fileName);
+  } catch (e) {
+    showToast(e.message || 'Lỗi kết nối server', 'error');
+    console.error('[upload]', e);
+  } finally {
+    setUploadProcessing(false);
+  }
+});
+
+function setUploadProcessing(on) {
+  isProcessing = on;
+  btnProcess.disabled = on;
+  document.getElementById('processLabel').textContent = on ? 'Đang xử lý… (file dài có thể mất vài phút)' : 'Nhận diện giọng nói';
+}
+
+// ── Recording ──────────────────────────────
+recordBtn.addEventListener('click', () => {
+  if (isProcessing) return;
+  if (isRecording) stopRecording();
+  else startRecording();
+});
+
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    showToast('Không thể truy cập microphone: ' + e.message, 'error');
+    return;
+  }
+  audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+  sampleRate = audioCtx.sampleRate;
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  analyserNode = audioCtx.createAnalyser();
+  analyserNode.fftSize = 1024;
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  source.connect(analyserNode);
+  analyserNode.connect(processor);
+  processor.connect(audioCtx.destination);
+  pcmChunks = [];
+  processor.onaudioprocess = e => {
+    if (!isRecording) return;
+    pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+  isRecording = true;
+  timerSeconds = 0;
+  setRecordingUI(true);
+  startTimer();
+  drawWaveform();
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  if (processor)    { processor.disconnect(); processor = null; }
+  if (analyserNode) { analyserNode.disconnect(); analyserNode = null; }
+  if (mediaStream)  { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioCtx)     { audioCtx.close(); audioCtx = null; }
+  if (animationId)  { cancelAnimationFrame(animationId); animationId = null; }
+  stopTimer();
+  canvas.style.display = 'none'; idleWave.style.display = '';
+
+  if (pcmChunks.length === 0) { setIdleUI(); return; }
+  const total  = pcmChunks.reduce((a, c) => a + c.length, 0);
+  const merged = new Float32Array(total);
+  let off = 0;
+  for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
+
+  const wav = encodeWAV(merged, sampleRate);
+  setProcessingUI();
+  sendRecordedAudio(wav);
+}
+
+async function sendRecordedAudio(wavBlob) {
+  const fd = new FormData();
+  fd.append('audio', wavBlob, 'recording.wav');
+  fd.append('engine', engine);
+  fd.append('language', language);
+  fd.append('source', 'record');
+  try {
+    const res  = await fetch('/api/transcribe', { method: 'POST', body: fd });
+    const data = await parseResponse(res);
+    if (data.error) showToast(data.error, 'error');
+    else applyTranscriptResult(data, 'record', 'recording.wav');
+  } catch (e) {
+    showToast(e.message || 'Lỗi kết nối server', 'error');
+    console.error('[transcribe]', e);
+  } finally {
+    setIdleUI();
+  }
+}
+
+// ── WAV encoder ────────────────────────────
+function encodeWAV(samples, rate) {
+  const len = samples.length;
+  const buf = new ArrayBuffer(44 + len * 2);
+  const v   = new DataView(buf);
+  const w   = (off, str) => { for (let i=0;i<str.length;i++) v.setUint8(off+i, str.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4,36+len*2,true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40,len*2,true);
+  const i16 = new Int16Array(buf,44);
+  for (let i=0;i<len;i++) { const s=Math.max(-1,Math.min(1,samples[i])); i16[i]=s<0?s*0x8000:s*0x7FFF; }
+  return new Blob([buf],{type:'audio/wav'});
+}
+
+// ── Waveform ───────────────────────────────
+function drawWaveform() {
+  if (!analyserNode) return;
+  canvas.style.display='block'; idleWave.style.display='none';
+  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+  const data = new Uint8Array(analyserNode.fftSize);
+  analyserNode.getByteTimeDomainData(data);
+  canvasCtx.clearRect(0,0,canvas.width,canvas.height);
+  canvasCtx.lineWidth   = 2.5 * devicePixelRatio;
+  canvasCtx.strokeStyle = '#ef4444';
+  canvasCtx.beginPath();
+  const sw = canvas.width / data.length;
+  for (let i=0;i<data.length;i++) {
+    const y=(data[i]/128)*(canvas.height/2);
+    i===0?canvasCtx.moveTo(0,y):canvasCtx.lineTo(i*sw,y);
+  }
+  canvasCtx.lineTo(canvas.width,canvas.height/2);
+  canvasCtx.stroke();
+  animationId = requestAnimationFrame(drawWaveform);
+}
+
+// ── UI state ───────────────────────────────
+function setRecordingUI() {
+  recordBtn.classList.add('recording');
+  iconMic.style.display='none'; iconStop.style.display=''; iconSpinner.style.display='none';
+  statusText.textContent='Đang ghi âm… nhấn lại để dừng';
+  statusText.className='status-text recording';
+}
+function setProcessingUI() {
+  isProcessing=true; recordBtn.classList.remove('recording'); recordBtn.classList.add('processing');
+  iconMic.style.display='none'; iconStop.style.display='none'; iconSpinner.style.display='';
+  statusText.textContent='Đang nhận diện…'; statusText.className='status-text processing';
+  timerEl.textContent='';
+}
+function setIdleUI() {
+  isProcessing=false; recordBtn.classList.remove('recording','processing');
+  iconMic.style.display=''; iconStop.style.display='none'; iconSpinner.style.display='none';
+  statusText.textContent='Nhấn để bắt đầu ghi âm'; statusText.className='status-text';
+  timerEl.textContent=''; canvas.style.display='none'; idleWave.style.display='';
+}
+
+// ── Timer ──────────────────────────────────
+function startTimer() {
+  timerEl.textContent='0:00';
+  timerInterval=setInterval(()=>{
+    timerSeconds++;
+    const m=Math.floor(timerSeconds/60), s=String(timerSeconds%60).padStart(2,'0');
+    timerEl.textContent=`${m}:${s}`;
+    if(timerSeconds>=120) stopRecording();
+  },1000);
+}
+function stopTimer() { clearInterval(timerInterval); timerInterval=null; }
+
+// ── HTTP helper ────────────────────────────
+async function parseResponse(res) {
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  const text = await res.text();
+  const brief = text.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0, 200);
+  throw new Error(`HTTP ${res.status} — ${brief || 'server error'}`);
+}
+
+// ── Transcript ─────────────────────────────
+function applyTranscriptResult(data, source, filename) {
+  transcriptEl.value = data.text || '';
+  let meta = data.engine || '';
+  if (data.confidence) meta += ` · Độ tin cậy: ${data.confidence}%`;
+  if (data.chunks > 1) meta += ` · Xử lý ${data.chunks} đoạn`;
+  metaInfo.textContent = meta;
+
+  lastResult = {
+    text: data.text || '', engine: data.engine, language, confidence: data.confidence ?? null,
+    source, filename, savedId: data.saved_id ?? null,
+  };
+  setSaveDbState(lastResult.savedId);
+
+  if (data.db_error) showToast(data.db_error, 'error');
+  else if (data.saved_id) { showToast(`Nhận diện thành công, đã lưu DB (#${data.saved_id})`, 'success'); loadHistory(); }
+  else showToast('Nhận diện thành công!', 'success');
+}
+
+function setSaveDbState(savedId) {
+  document.getElementById('saveDbLabel').textContent = savedId ? `Đã lưu #${savedId}` : 'Lưu DB';
+  document.getElementById('btnSaveDb').disabled = !!savedId;
+}
+
+// ── PostgreSQL ─────────────────────────────
+document.getElementById('btnSaveDb').addEventListener('click', async () => {
+  if (!lastResult || !lastResult.text) return showToast('Chưa có kết quả để lưu', 'info');
+  if (!dbConfigured) { showToast('Chưa cấu hình PostgreSQL. Vào Cài đặt để thêm.', 'info'); return; }
+  const btn = document.getElementById('btnSaveDb');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/transcripts', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(lastResult),
+    });
+    const data = await parseResponse(res);
+    if (data.error) { showToast(data.error, 'error'); btn.disabled = false; return; }
+    lastResult.savedId = data.id;
+    setSaveDbState(data.id);
+    showToast(`Đã lưu vào PostgreSQL (#${data.id})`, 'success');
+    loadHistory();
+  } catch (e) {
+    showToast(e.message || 'Lỗi kết nối server', 'error');
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnReloadHistory').addEventListener('click', loadHistory);
+
+async function loadHistory() {
+  if (!dbConfigured) return;
+  const list = document.getElementById('historyList');
+  try {
+    const data = await parseResponse(await fetch('/api/transcripts?limit=20'));
+    if (data.error) { list.innerHTML = ''; list.append(historyNote(data.error)); return; }
+    list.innerHTML = '';
+    if (!data.items.length) { list.append(historyNote('Chưa có bản ghi nào')); return; }
+    for (const item of data.items) list.append(historyItem(item));
+  } catch (e) {
+    list.innerHTML = '';
+    list.append(historyNote(e.message));
+  }
+}
+
+function historyNote(text) {
+  const el = document.createElement('div');
+  el.className = 'history-empty';
+  el.textContent = text;
+  return el;
+}
+
+function historyItem(item) {
+  const el = document.createElement('button');
+  el.className = 'history-item';
+  const meta = document.createElement('div');
+  meta.className = 'history-meta';
+  const when = new Date(item.created_at).toLocaleString('vi-VN');
+  const src = item.source === 'upload' ? `📁 ${item.filename || ''}` : '🎤 Ghi âm';
+  meta.textContent = `#${item.id} · ${when} · ${src} · ${item.engine || ''} · ${item.language || ''}`;
+  const text = document.createElement('div');
+  text.className = 'history-text';
+  text.textContent = item.text;
+  el.append(meta, text);
+  el.addEventListener('click', () => {
+    transcriptEl.value = item.text;
+    metaInfo.textContent = `Từ DB #${item.id} · ${item.engine || ''}`;
+    lastResult = { ...item, savedId: item.id };
+    setSaveDbState(item.id);
+  });
+  return el;
+}
+
+function dbFormValues() {
+  return {
+    mode: document.querySelector('input[name="dbMode"]:checked').value,
+    host: document.getElementById('dbHost').value.trim(),
+    port: document.getElementById('dbPort').value,
+    database: document.getElementById('dbName').value.trim(),
+    user: document.getElementById('dbUser').value.trim(),
+    password: document.getElementById('dbPassword').value,
+    auto_save: document.getElementById('dbAutoSave').checked,
+  };
+}
+
+function applyDbMode() {
+  const isLocal = document.querySelector('input[name="dbMode"]:checked').value === 'localhost';
+  const host = document.getElementById('dbHost');
+  host.disabled = isLocal;
+  if (isLocal) host.value = 'localhost';
+  else if (host.value === 'localhost') host.value = '';
+}
+document.querySelectorAll('input[name="dbMode"]').forEach(r => r.addEventListener('change', applyDbMode));
+
+let dbFormDirty = false;
+['dbHost', 'dbPort', 'dbName', 'dbUser', 'dbPassword', 'dbAutoSave'].forEach(id =>
+  document.getElementById(id).addEventListener('input', () => { dbFormDirty = true; }));
+document.querySelectorAll('input[name="dbMode"]').forEach(r =>
+  r.addEventListener('change', () => { dbFormDirty = true; }));
+
+function fillDbForm(cfg) {
+  document.querySelector(`input[name="dbMode"][value="${cfg.mode === 'remote' ? 'remote' : 'localhost'}"]`).checked = true;
+  document.getElementById('dbHost').value = cfg.host || '';
+  document.getElementById('dbPort').value = cfg.port || 5432;
+  document.getElementById('dbName').value = cfg.database || '';
+  document.getElementById('dbUser').value = cfg.user || '';
+  document.getElementById('dbPassword').value = '';
+  document.getElementById('dbPasswordHint').textContent = cfg.has_password
+    ? 'Đã lưu mật khẩu. Để trống nếu không muốn đổi.' : '';
+  document.getElementById('dbAutoSave').checked = !!cfg.auto_save;
+  applyDbMode();
+  dbFormDirty = false;
+}
+
+document.getElementById('btnTestDb').addEventListener('click', async () => {
+  const btn = document.getElementById('btnTestDb');
+  btn.textContent = 'Đang kiểm tra…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/db/test', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(dbFormValues()),
+    }).then(parseResponse);
+    showStatus(document.getElementById('dbStatus'), r.success, r.message);
+  } catch (e) {
+    showStatus(document.getElementById('dbStatus'), false, `Không gọi được server app (${e.message}). Kiểm tra python app.py còn chạy không.`);
+  }
+  btn.textContent = 'Kiểm tra kết nối DB';
+  btn.disabled = false;
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  if (!transcriptEl.value) return showToast('Chưa có nội dung', 'info');
+  navigator.clipboard.writeText(transcriptEl.value).then(() => showToast('Đã sao chép!', 'success'));
+});
+document.getElementById('btnClear').addEventListener('click', () => {
+  transcriptEl.value=''; metaInfo.textContent='';
+  lastResult = null; setSaveDbState(null);
+});
+document.getElementById('btnDownload').addEventListener('click', () => {
+  if (!transcriptEl.value) return showToast('Chưa có nội dung', 'info');
+  const blob = new Blob([transcriptEl.value], {type:'text/plain;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download=`transcript_${Date.now()}.txt`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── Settings ───────────────────────────────
+document.getElementById('btnSettings').addEventListener('click',  () => {
+  overlay.classList.add('open');
+  apiStatus.classList.remove('show');
+  document.getElementById('dbStatus').classList.remove('show');
+});
+document.getElementById('btnCloseModal').addEventListener('click', () => overlay.classList.remove('open'));
+overlay.addEventListener('click', e => { if(e.target===overlay) overlay.classList.remove('open'); });
+
+document.getElementById('btnTestKey').addEventListener('click', async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key && !hasSavedApiKey) { showApiStatus(false,'Nhập API Key trước'); return; }
+  document.getElementById('btnTestKey').textContent='Đang kiểm tra…';
+  try {
+    // An empty body makes the server test the saved key
+    const body = key ? {api_key: key} : {};
+    const r = await fetch('/api/test-api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(parseResponse);
+    showApiStatus(r.success, r.message);
+  } catch(e) { showApiStatus(false,'Lỗi kết nối'); }
+  document.getElementById('btnTestKey').textContent='Kiểm tra API Key';
+});
+
+document.getElementById('btnSaveSettings').addEventListener('click', async () => {
+  const key = apiKeyInput.value.trim();
+  const payload = {engine, language};
+  if (key) payload.google_api_key = key;
+  if (dbFormDirty) payload.db = dbFormValues();
+  try {
+    const r = await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(parseResponse);
+    if (!r.success) { showStatus(document.getElementById('dbStatus'), false, r.message || 'Lỗi lưu cài đặt'); return; }
+    showToast('Đã lưu cài đặt','success');
+    overlay.classList.remove('open');
+    init();
+  } catch(e) { showToast(`Lỗi lưu cài đặt: ${e.message}`,'error'); }
+});
+
+function showStatus(el, ok, msg) {
+  el.textContent = msg; el.className = 'api-status show ' + (ok ? 'ok' : 'fail');
+}
+function showApiStatus(ok,msg) { showStatus(apiStatus, ok, msg); }
+
+// ── Toast ──────────────────────────────────
+let toastTimer=null;
+function showToast(msg,type='info') {
+  clearTimeout(toastTimer);
+  toast.textContent=msg; toast.className=`toast ${type} show`;
+  toastTimer=setTimeout(()=>toast.classList.remove('show'),3200);
+}
+
+canvas.style.display='none';
+</script>
+</body>
+</html>
